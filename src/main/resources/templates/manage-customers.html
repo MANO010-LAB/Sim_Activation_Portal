@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Customers</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .action-icons i { cursor: pointer; margin: 0 5px; font-size: 1.2rem; }
+        .pagination .page-link { cursor: pointer; }
+        .sim-loading { font-size: 0.8rem; color: gray; }
+        .assigned-sim-item { background: #f8f9fa; padding: 5px 10px; margin: 5px 0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .unassign-sim, .toggle-sim-status { cursor: pointer; margin-left: 10px; }
+        .unassign-sim { color: red; }
+        .toggle-sim-status.active { color: green; }
+        .toggle-sim-status.inactive { color: orange; }
+        .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table { min-width: 900px; width: 100%; }
+        @media (max-width: 768px) {
+            .row > div { margin-bottom: 10px; }
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark">
+    <div class="container">
+        <span class="navbar-brand">SIM Activation Portal - Admin Panel</span>
+        <div>
+            <a href="/dashboard" class="btn btn-outline-light me-2">Dashboard</a>
+            <button id="logoutBtn" class="btn btn-outline-light">Logout</button>
+        </div>
+    </div>
+</nav>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+        <h2>Customer Management</h2>
+        <button class="btn btn-success" id="openAddModalBtn">+ Add New Customer</button>
+    </div>
+
+    <div class="row mb-3 g-2">
+        <div class="col-md-3 col-sm-6">
+            <label>Rows per page:</label>
+            <select id="sizeSelect" class="form-select">
+                <option value="5" selected>5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+            </select>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <label>Sort by:</label>
+            <select id="sortBySelect" class="form-select">
+                <option value="firstName">First Name</option>
+                <option value="lastName">Last Name</option>
+                <option value="email">Email</option>
+                <option value="mobileNumber">Mobile</option>
+            </select>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <label>Order:</label>
+            <select id="sortDirSelect" class="form-select">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>First Name</th><th>Last Name</th><th>Email</th><th>DOB</th><th>Mobile</th>
+                    <th>SIM Number</th><th>ID Proof Type</th><th>ID Proof No.</th><th>Address</th><th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="customerTableBody">
+                <tr><td colspan="10" class="text-center">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <nav><ul class="pagination justify-content-center" id="pagination"></ul></nav>
+</div>
+
+<!-- Modal for Add/Edit Customer -->
+<div class="modal fade" id="customerModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalTitle">Add Customer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="customerForm">
+                    <input type="hidden" id="customerId">
+                    <div class="row">
+                        <div class="col-md-6 mb-2"><label>First Name*</label><input type="text" id="firstName" class="form-control" required></div>
+                        <div class="col-md-6 mb-2"><label>Last Name*</label><input type="text" id="lastName" class="form-control" required></div>
+                        <div class="col-md-6 mb-2"><label>Email*</label><input type="email" id="email" class="form-control" required></div>
+                        <div class="col-md-6 mb-2"><label>Date of Birth*</label><input type="date" id="dob" class="form-control" required></div>
+                        <div class="col-md-6 mb-2"><label>Mobile Number*</label><input type="text" id="mobileNumber" class="form-control" required></div>
+                        <div class="col-md-6 mb-2"><label>ID Proof Type</label><input type="text" id="idProofType" class="form-control" placeholder="AADHAR/PAN"></div>
+                        <div class="col-md-6 mb-2"><label>ID Proof Number</label><input type="text" id="idProofNumber" class="form-control"></div>
+                        <div class="col-md-12 mb-2"><label>Address</label><textarea id="address" class="form-control" rows="2"></textarea></div>
+                    </div>
+                </form>
+                <hr id="simManagementSeparator" style="display:none;">
+                <div id="simManagementSection" style="display:none;">
+                    <h6>Assigned SIMs</h6>
+                    <div id="assignedSimsList" class="mb-2">Loading...</div>
+                    <div class="input-group">
+                        <input type="text" id="assignSimNumber" class="form-control" placeholder="Enter SIM Number (e.g., SIM001)">
+                        <button class="btn btn-primary" type="button" id="assignSimBtn">Assign SIM</button>
+                    </div>
+                    <div id="assignError" class="text-danger small mt-1" style="display:none;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveCustomerBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let currentPage = 0;
+    let totalPages = 0;
+    let currentModal = null;
+
+    async function loadCustomers(page) {
+        currentPage = page;
+        const size = document.getElementById("sizeSelect").value;
+        const sortBy = document.getElementById("sortBySelect").value;
+        const sortDir = document.getElementById("sortDirSelect").value;
+        try {
+            const res = await fetch(`/api/admin/customers?page=${page}&size=${size}&sortBy=${sortBy}&direction=${sortDir}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            renderTable(data.content);
+            totalPages = data.totalPages;
+            renderPagination();
+        } catch (err) {
+            console.error(err);
+            document.getElementById("customerTableBody").innerHTML = '<tr><td colspan="10" class="text-danger">Failed to load data. See console.</td></tr>';
+        }
+    }
+
+    function renderTable(customers) {
+        const tbody = document.getElementById("customerTableBody");
+        if (!customers.length) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No customers found</td></tr>';
+            return;
+        }
+        let html = '';
+        for (let c of customers) {
+            html += `<tr id="customer-row-${c.id}">
+                        <td>${c.firstName}</td>
+                        <td>${c.lastName}</td>
+                        <td>${c.email}</td>
+                        <td>${c.dateOfBirth}</td>
+                        <td>${c.mobileNumber || ''}</td>
+                        <td id="sim-cell-${c.id}" class="sim-loading">Loading...</td>
+                        <td>${c.idProofType || ''}</td>
+                        <td>${c.idProofNumber || ''}</td>
+                        <td>${c.address || ''}</td>
+                        <td class="action-icons">
+                            <i class="bi bi-pencil-square text-primary" onclick="openEditModal(${c.id})" style="cursor:pointer;">✏️</i>
+                            <i class="bi bi-trash text-danger" onclick="deleteCustomer(${c.id})" style="cursor:pointer;">🗑️</i>
+                        </td>
+                     </tr>`;
+        }
+        tbody.innerHTML = html;
+        for (let c of customers) loadSimForCustomer(c.id);
+    }
+
+    async function loadSimForCustomer(customerId) {
+        try {
+            const res = await fetch(`/api/admin/customer/${customerId}/sims`);
+            if (!res.ok) throw new Error();
+            const sims = await res.json();
+            const cell = document.getElementById(`sim-cell-${customerId}`);
+            if (cell) {
+                cell.innerHTML = sims.length ? sims.map(s => s.simNumber).join(', ') : 'None';
+                cell.classList.remove('sim-loading');
+            }
+        } catch(err) {
+            const cell = document.getElementById(`sim-cell-${customerId}`);
+            if (cell) cell.innerHTML = 'Error';
+        }
+    }
+
+    function renderPagination() {
+        let html = '';
+        if (currentPage > 0) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="loadCustomers(${currentPage-1}); return false;">Previous</a></li>`;
+        }
+        for (let i = 0; i < totalPages; i++) {
+            html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="loadCustomers(${i}); return false;">${i+1}</a></li>`;
+        }
+        if (currentPage < totalPages-1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="loadCustomers(${currentPage+1}); return false;">Next</a></li>`;
+        }
+        document.getElementById("pagination").innerHTML = html;
+    }
+
+    function showModal() {
+        if (currentModal) currentModal.dispose();
+        currentModal = new bootstrap.Modal(document.getElementById("customerModal"));
+        currentModal.show();
+    }
+
+    function hideModal() {
+        if (currentModal) {
+            currentModal.hide();
+            currentModal.dispose();
+            currentModal = null;
+        }
+        document.getElementById("customerForm").reset();
+        document.getElementById("customerId").value = "";
+        document.getElementById("simManagementSeparator").style.display = "none";
+        document.getElementById("simManagementSection").style.display = "none";
+        document.getElementById("assignError").style.display = "none";
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+    }
+
+    document.getElementById("openAddModalBtn").onclick = () => {
+        document.getElementById("modalTitle").innerText = "Add Customer";
+        hideModal();
+        showModal();
+    };
+
+    window.openEditModal = async function(id) {
+        hideModal();
+        try {
+            const res = await fetch(`/api/admin/customer/${id}`);
+            if (!res.ok) throw new Error();
+            const c = await res.json();
+            document.getElementById("modalTitle").innerText = "Edit Customer";
+            document.getElementById("customerId").value = c.id;
+            document.getElementById("firstName").value = c.firstName;
+            document.getElementById("lastName").value = c.lastName;
+            document.getElementById("email").value = c.email;
+            document.getElementById("dob").value = c.dateOfBirth;
+            document.getElementById("mobileNumber").value = c.mobileNumber || "";
+            document.getElementById("idProofType").value = c.idProofType || "";
+            document.getElementById("idProofNumber").value = c.idProofNumber || "";
+            document.getElementById("address").value = c.address || "";
+            document.getElementById("simManagementSeparator").style.display = "block";
+            document.getElementById("simManagementSection").style.display = "block";
+            await refreshSimManagement(c.id);
+            showModal();
+        } catch(err) { alert("Error loading customer: " + err); }
+    };
+
+    async function refreshSimManagement(customerId) {
+        const assignedRes = await fetch(`/api/admin/customer/${customerId}/sims`);
+        const assignedSims = await assignedRes.json();
+        const assignedDiv = document.getElementById("assignedSimsList");
+        if (!assignedSims.length) {
+            assignedDiv.innerHTML = "<em>No SIMs assigned</em>";
+        } else {
+            let html = '';
+            for (let sim of assignedSims) {
+                const statusClass = sim.status === 'ACTIVE' ? 'active' : 'inactive';
+                const statusText = sim.status === 'ACTIVE' ? 'Deactivate' : 'Activate';
+                html += `<div class="assigned-sim-item">
+                            ${sim.simNumber} (${sim.planName}) - <strong>${sim.status}</strong>
+                            <span>
+                                <span class="toggle-sim-status ${statusClass}" onclick="toggleSimStatus(${sim.id}, ${customerId})">🔁 ${statusText}</span>
+                                <span class="unassign-sim" onclick="unassignSim(${customerId}, ${sim.id})">✖ Remove</span>
+                            </span>
+                         </div>`;
+            }
+            assignedDiv.innerHTML = html;
+        }
+        document.getElementById("assignSimNumber").value = "";
+        document.getElementById("assignError").style.display = "none";
+        const assignBtn = document.getElementById("assignSimBtn");
+        const newBtn = assignBtn.cloneNode(true);
+        assignBtn.parentNode.replaceChild(newBtn, assignBtn);
+        newBtn.id = "assignSimBtn";
+        newBtn.onclick = () => assignSimByNumber(customerId);
+    }
+
+    async function assignSimByNumber(customerId) {
+        const simNumber = document.getElementById("assignSimNumber").value.trim();
+        if (!simNumber) { showAssignError("Enter a SIM number."); return; }
+        try {
+            const res = await fetch(`/api/admin/customer/${customerId}/assign-sim-by-number`, {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ simNumber })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await refreshSimManagement(customerId);
+                await loadCustomers(currentPage);
+                document.getElementById("assignSimNumber").value = "";
+            } else { showAssignError(data.message); }
+        } catch(err) { showAssignError("Network error"); }
+    }
+
+    function showAssignError(msg) {
+        const errDiv = document.getElementById("assignError");
+        errDiv.innerText = msg;
+        errDiv.style.display = "block";
+        setTimeout(() => errDiv.style.display = "none", 3000);
+    }
+
+    window.unassignSim = async function(customerId, simId) {
+        if (!confirm("Remove SIM?")) return;
+        try {
+            const res = await fetch(`/api/admin/customer/${customerId}/unassign-sim/${simId}`, { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                await refreshSimManagement(customerId);
+                await loadCustomers(currentPage);
+            } else alert(data.message);
+        } catch(err) { alert("Error"); }
+    };
+
+    window.toggleSimStatus = async function(simId, customerId) {
+        try {
+            const res = await fetch(`/api/admin/sim/${simId}/toggle-status`, { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                await refreshSimManagement(customerId);
+                await loadCustomers(currentPage);
+            } else alert(data.message);
+        } catch(err) { alert("Error"); }
+    };
+
+    document.getElementById("saveCustomerBtn").onclick = async () => {
+        const btn = document.getElementById("saveCustomerBtn");
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const id = document.getElementById("customerId").value;
+        const customer = {
+            firstName: document.getElementById("firstName").value,
+            lastName: document.getElementById("lastName").value,
+            email: document.getElementById("email").value,
+            dateOfBirth: document.getElementById("dob").value,
+            mobileNumber: document.getElementById("mobileNumber").value,
+            idProofType: document.getElementById("idProofType").value,
+            idProofNumber: document.getElementById("idProofNumber").value,
+            address: document.getElementById("address").value
+        };
+        const method = id ? "PUT" : "POST";
+        const url = id ? `/api/admin/customer/${id}` : "/api/admin/customer";
+        try {
+            const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(customer) });
+            const data = await res.json();
+            if (data.success) {
+                if (currentModal) {
+                    currentModal.hide();
+                    currentModal.dispose();
+                    currentModal = null;
+                }
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                document.body.classList.remove('modal-open');
+                window.location.reload();
+            } else {
+                alert("Error: " + data.message);
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        } catch(err) {
+            alert("Save failed: " + err);
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    };
+
+    window.deleteCustomer = async function(id) {
+        if (!confirm("Delete customer?")) return;
+        try {
+            const res = await fetch(`/api/admin/customer/${id}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) await loadCustomers(currentPage);
+            else alert("Delete failed");
+        } catch(err) { alert("Delete error"); }
+    };
+
+    document.getElementById("logoutBtn").onclick = async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        window.location.href = "/";
+    };
+
+    document.getElementById("sizeSelect").onchange = () => loadCustomers(0);
+    document.getElementById("sortBySelect").onchange = () => loadCustomers(0);
+    document.getElementById("sortDirSelect").onchange = () => loadCustomers(0);
+
+    loadCustomers(0);
+</script>
+</body>
+</html>
